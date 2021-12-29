@@ -206,35 +206,17 @@ func publish(event *MatchEvent) {
 }
 
 func main() {
-	session.Log.Info(color.HiBlueString(core.Banner))
-	session.Log.Info("\t%s\n", color.HiCyanString(core.Author))
-	session.Log.Info("[*] Loaded %s signatures. Using %s worker threads. Temp work dir: %s\n", color.BlueString("%d", len(session.Signatures)), color.BlueString("%d", *session.Options.Threads), color.BlueString(*session.Options.TempDirectory))
+	ui := core.GetUI()
+	ui.Initialize()
 
-	if len(*session.Options.Local) > 0 {
-		session.Log.Info("[*] Scanning local directory: %s - skipping public repository checks...", color.BlueString(*session.Options.Local))
-		rc := 0
-		if checkSignatures(*session.Options.Local, *session.Options.Local, -1, core.LOCAL_SOURCE) {
-			rc = 1
-		} else {
-			session.Log.Info("[*] No matching secrets found in %s!", color.BlueString(*session.Options.Local))
-		}
-		os.Exit(rc)
-	} else {
-		if *session.Options.SearchQuery != "" {
-			session.Log.Important("Search Query '%s' given. Only returning matching results.", *session.Options.SearchQuery)
-		}
+	go core.GetRepositories(session)
+	go ProcessRepositories()
+	go ProcessComments()
 
-		go core.GetRepositories(session)
-		go ProcessRepositories()
-		go ProcessComments()
-
-		if *session.Options.ProcessGists {
-			go core.GetGists(session)
-			go ProcessGists()
-		}
-
-		spinny := core.ShowSpinner()
-		select {}
-		spinny()
+	if *session.Options.ProcessGists {
+		go core.GetGists(session)
+		go ProcessGists()
 	}
+
+	ui.Run()
 }

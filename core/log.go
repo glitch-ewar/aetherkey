@@ -2,10 +2,8 @@ package core
 
 import (
 	"fmt"
-	"net/http"
 	"os"
 	"regexp"
-	"strings"
 	"sync"
 
 	"github.com/fatih/color"
@@ -55,16 +53,15 @@ func (l *Logger) Log(level int, format string, args ...interface{}) {
 		return
 	}
 
-	if c, ok := LogColors[level]; ok {
-		c.Printf("\r"+format+"\n", args...)
+	if GetUI() == nil {
+		if c, ok := LogColors[level]; ok {
+			c.Printf("\r"+format+"\n", args...)
+		} else {
+			fmt.Printf("\r"+format+"\n", args...)
+		}
 	} else {
-		fmt.Printf("\r"+format+"\n", args...)
-	}
-
-	if level > WARN && session.Config.Webhook != "" {
 		text := colorStrip(fmt.Sprintf(format, args...))
-		payload := fmt.Sprintf(session.Config.WebhookPayload, text)
-		http.Post(session.Config.Webhook, "application/json", strings.NewReader(payload))
+		fmt.Fprintf(GetUI().LogWindow, "\r\n%s", text)
 	}
 
 	if level == FATAL {

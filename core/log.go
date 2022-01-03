@@ -26,6 +26,8 @@ var LogColors = map[int]*color.Color{
 	DEBUG:     color.New(color.Faint),
 }
 
+var firstEntry = true
+
 type Logger struct {
 	sync.Mutex
 
@@ -61,7 +63,12 @@ func (l *Logger) Log(level int, format string, args ...interface{}) {
 		}
 	} else {
 		text := colorStrip(fmt.Sprintf(format, args...))
-		fmt.Fprintf(GetUI().LogWindow, "\r\n%s", text)
+		if firstEntry {
+			fmt.Fprintf(GetUI().LogWindow, "%s", text)
+			firstEntry = false
+		} else {
+			fmt.Fprintf(GetUI().LogWindow, "\r\n%s", text)
+		}
 	}
 
 	if level == FATAL {

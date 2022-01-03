@@ -1,6 +1,7 @@
 package core
 
 import (
+	"container/list"
 	"fmt"
 	"time"
 
@@ -8,19 +9,28 @@ import (
 )
 
 type UI struct {
-	App          *tview.Application
-	MainWindow   *tview.Flex
-	StatusWindow *tview.TextView
-	LogWindow    *tview.TextView
+	App              *tview.Application
+	MainWindow       *tview.Flex
+	StatusWindow     *tview.TextView
+	SignaturesWindow *tview.List
+	LogWindow        *tview.TextView
+}
+
+type Result struct {
+	Key string
 }
 
 var tui UI
+var signatures map[string]*list.List
 
 func GetUI() *UI {
 	return &tui
 }
 
 func (ui *UI) Initialize() {
+	signatures = make(map[string]*list.List)
+	signatures["test"] = list.New()
+
 	ui.App = tview.NewApplication()
 
 	ui.StatusWindow = tview.NewTextView()
@@ -37,9 +47,13 @@ func (ui *UI) Initialize() {
 		ui.App.Draw()
 	})
 
+	ui.SignaturesWindow = tview.NewList()
+	ui.SignaturesWindow.SetBorder(true)
+	ui.SignaturesWindow.SetTitle("Signatures")
+
 	hflex := tview.NewFlex().SetDirection(tview.FlexColumn).
-		AddItem(tview.NewBox().SetBorder(true).SetTitle("Left"), 0, 1, false).
-		AddItem(tview.NewBox().SetBorder(true).SetTitle("Middle (3 x height of Top)"), 0, 6, false)
+		AddItem(ui.SignaturesWindow, 0, 1, false).
+		AddItem(tview.NewBox().SetBorder(true).SetTitle("Details"), 0, 6, false)
 
 	ui.MainWindow = tview.NewFlex().SetDirection(tview.FlexRow)
 	ui.MainWindow.AddItem(ui.StatusWindow, 3, 1, false)
@@ -49,8 +63,31 @@ func (ui *UI) Initialize() {
 	go ui.UpdateStatus()
 }
 
+func (ui *UI) Publish(signature string) {
+	results, contains := signatures[signature]
+	if contains {
+		indices := ui.SignaturesWindow.FindItems(signature, "", false, false)
+		if len(indices) > 0 {
+
+			result := Result{Key: "test"}
+			results.PushBack(result)
+
+			ui.SignaturesWindow.SetItemText(indices[0], signature, fmt.Sprintf("> %d entries", results.Len()))
+		}
+	} else {
+		ui.SignaturesWindow.AddItem(signature, "> 1 entry", 0, nil)
+
+		results := list.New()
+		result := Result{Key: "test"}
+		results.PushBack(result)
+		signatures[signature] = results
+	}
+
+	//ui.SignaturesWindow.FindItems(signature, "", false, false)
+}
+
 func (ui *UI) Run() {
-	if err := ui.App.SetRoot(ui.MainWindow, true).SetFocus(ui.MainWindow).Run(); err != nil {
+	if err := ui.App.SetRoot(ui.MainWindow, true).SetFocus(ui.SignaturesWindow).Run(); err != nil {
 		panic(err)
 	}
 }

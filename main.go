@@ -4,9 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"encoding/json"
 	"io/ioutil"
-	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -198,11 +196,7 @@ func checkSignatures(dir string, url string, stars int, source core.GitResourceT
 }
 
 func publish(event *MatchEvent) {
-	// todo: implement a modular plugin system to handle the various outputs (console, live, csv, webhooks, etc)
-	if len(*session.Options.Live) > 0 {
-		data, _ := json.Marshal(event)
-		http.Post(*session.Options.Live, "application/json", bytes.NewBuffer(data))
-	}
+	core.GetUI().Publish(event.Signature)
 }
 
 func main() {

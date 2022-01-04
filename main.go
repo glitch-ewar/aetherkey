@@ -196,7 +196,7 @@ func checkSignatures(dir string, url string, stars int, source core.GitResourceT
 }
 
 func publish(event *MatchEvent) {
-	core.GetUI().Publish(event.Signature)
+	core.GetUI().Publish(event.Signature, event.Url, event.Matches)
 }
 
 func main() {

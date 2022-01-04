@@ -1,7 +1,6 @@
 package core
 
 import (
-	"container/list"
 	"fmt"
 	"time"
 
@@ -13,23 +12,24 @@ type UI struct {
 	MainWindow       *tview.Flex
 	StatusWindow     *tview.TextView
 	SignaturesWindow *tview.List
+	DetailsWindow    *tview.Table
 	LogWindow        *tview.TextView
 }
 
 type Result struct {
-	Key string
+	Url   string
+	Match string
 }
 
 var tui UI
-var signatures map[string]*list.List
+var signatures map[string][]Result
 
 func GetUI() *UI {
 	return &tui
 }
 
 func (ui *UI) Initialize() {
-	signatures = make(map[string]*list.List)
-	signatures["test"] = list.New()
+	signatures = make(map[string][]Result)
 
 	ui.App = tview.NewApplication()
 
@@ -50,40 +50,60 @@ func (ui *UI) Initialize() {
 	ui.SignaturesWindow = tview.NewList()
 	ui.SignaturesWindow.SetBorder(true)
 	ui.SignaturesWindow.SetTitle("Signatures")
+	ui.SignaturesWindow.ShowSecondaryText(false)
+
+	ui.DetailsWindow = tview.NewTable()
+	ui.DetailsWindow.SetBorders(true).
+		SetBorder(true).
+		SetTitle("Details")
+
+	ui.DetailsWindow.SetCell(0, 0, tview.NewTableCell("URL"))
+	ui.DetailsWindow.SetCell(0, 1, tview.NewTableCell("Match"))
 
 	hflex := tview.NewFlex().SetDirection(tview.FlexColumn).
 		AddItem(ui.SignaturesWindow, 0, 1, false).
-		AddItem(tview.NewBox().SetBorder(true).SetTitle("Details"), 0, 6, false)
+		AddItem(ui.DetailsWindow, 0, 6, false)
 
 	ui.MainWindow = tview.NewFlex().SetDirection(tview.FlexRow)
 	ui.MainWindow.AddItem(ui.StatusWindow, 3, 1, false)
 	ui.MainWindow.AddItem(hflex, 0, 1, false)
-	ui.MainWindow.AddItem(ui.LogWindow, 8, 1, false)
+	ui.MainWindow.AddItem(ui.LogWindow, 10, 1, false)
 
 	go ui.UpdateStatus()
 }
 
-func (ui *UI) Publish(signature string) {
+func (ui *UI) AddToDetailsWindow(signature string, result Result) {
+	idx := ui.DetailsWindow.GetRowCount()
+
+	ui.DetailsWindow.SetCell(idx, 0, tview.NewTableCell(result.Url))
+	ui.DetailsWindow.SetCell(idx, 1, tview.NewTableCell(result.Match))
+
+}
+
+func (ui *UI) Publish(signature string, url string, matches []string) {
 	results, contains := signatures[signature]
-	if contains {
-		indices := ui.SignaturesWindow.FindItems(signature, "", false, false)
-		if len(indices) > 0 {
 
-			result := Result{Key: "test"}
-			results.PushBack(result)
-
-			ui.SignaturesWindow.SetItemText(indices[0], signature, fmt.Sprintf("> %d entries", results.Len()))
-		}
-	} else {
-		ui.SignaturesWindow.AddItem(signature, "> 1 entry", 0, nil)
-
-		results := list.New()
-		result := Result{Key: "test"}
-		results.PushBack(result)
-		signatures[signature] = results
+	if !contains {
+		results = make([]Result, 0)
+		ui.SignaturesWindow.AddItem(signature, "", 0, nil)
 	}
 
-	//ui.SignaturesWindow.FindItems(signature, "", false, false)
+	for _, match := range matches {
+		result := Result{Url: url, Match: match}
+		duplicate := false
+		for _, r := range results {
+			if r.Url == url && r.Match == match {
+				duplicate = true
+				break
+			}
+		}
+
+		if !duplicate {
+			results = append(results, result)
+			signatures[signature] = results
+			ui.AddToDetailsWindow(signature, result)
+		}
+	}
 }
 
 func (ui *UI) Run() {

@@ -14,6 +14,10 @@ import (
 	"golang.org/x/oauth2"
 )
 
+type Processor struct {
+	Columns []string
+}
+
 type Session struct {
 	sync.Mutex
 
@@ -29,6 +33,7 @@ type Session struct {
 	Clients          chan *GitHubClientWrapper
 	ExhaustedClients chan *GitHubClientWrapper
 	CsvWriter        *csv.Writer
+	Processors       map[string]Processor
 }
 
 var (
@@ -41,6 +46,7 @@ func (s *Session) Start() {
 	rand.Seed(time.Now().Unix())
 
 	s.InitLogger()
+	s.InitProcessors()
 	s.InitThreads()
 	s.InitSignatures()
 	s.InitGitHubClients()

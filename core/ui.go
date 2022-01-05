@@ -16,10 +16,7 @@ type UI struct {
 	LogWindow        *tview.TextView
 }
 
-type Result struct {
-	Url   string
-	Match string
-}
+type Result map[string]string
 
 var tui UI
 var signatures map[string][]Result
@@ -51,14 +48,24 @@ func (ui *UI) Initialize() {
 	ui.SignaturesWindow.SetBorder(true)
 	ui.SignaturesWindow.SetTitle("Signatures")
 	ui.SignaturesWindow.ShowSecondaryText(false)
+	ui.SignaturesWindow.SetChangedFunc(func(index int, mainText, secondaryText string, shortcut rune) {
+		ui.DetailsWindow.Clear()
+
+		signature := mainText
+		processor := session.GetProcessor(signature)
+		for i, c := range processor.Columns {
+			ui.DetailsWindow.SetCell(0, i, tview.NewTableCell(c))
+		}
+
+		for _, r := range signatures[signature] {
+			ui.AddToDetailsWindow(signature, r)
+		}
+	})
 
 	ui.DetailsWindow = tview.NewTable()
 	ui.DetailsWindow.SetBorders(true).
 		SetBorder(true).
 		SetTitle("Details")
-
-	ui.DetailsWindow.SetCell(0, 0, tview.NewTableCell("URL"))
-	ui.DetailsWindow.SetCell(0, 1, tview.NewTableCell("Match"))
 
 	hflex := tview.NewFlex().SetDirection(tview.FlexColumn).
 		AddItem(ui.SignaturesWindow, 0, 1, false).
@@ -73,14 +80,18 @@ func (ui *UI) Initialize() {
 }
 
 func (ui *UI) AddToDetailsWindow(signature string, result Result) {
-	idx := ui.DetailsWindow.GetRowCount()
+	selectedSignature, _ := ui.SignaturesWindow.GetItemText(ui.SignaturesWindow.GetCurrentItem())
+	if selectedSignature == signature {
+		idx := ui.DetailsWindow.GetRowCount()
+		processor := session.GetProcessor(signature)
 
-	ui.DetailsWindow.SetCell(idx, 0, tview.NewTableCell(result.Url))
-	ui.DetailsWindow.SetCell(idx, 1, tview.NewTableCell(result.Match))
-
+		for i, c := range processor.Columns {
+			ui.DetailsWindow.SetCell(idx, i, tview.NewTableCell(result[c]))
+		}
+	}
 }
 
-func (ui *UI) Publish(signature string, url string, matches []string) {
+func (ui *UI) Publish(signature string, repository string, match string) {
 	results, contains := signatures[signature]
 
 	if !contains {
@@ -88,21 +99,22 @@ func (ui *UI) Publish(signature string, url string, matches []string) {
 		ui.SignaturesWindow.AddItem(signature, "", 0, nil)
 	}
 
-	for _, match := range matches {
-		result := Result{Url: url, Match: match}
-		duplicate := false
-		for _, r := range results {
-			if r.Url == url && r.Match == match {
-				duplicate = true
-				break
-			}
-		}
+	result := make(map[string]string)
+	result["Repository"] = repository
+	result["Match"] = match
 
-		if !duplicate {
-			results = append(results, result)
-			signatures[signature] = results
-			ui.AddToDetailsWindow(signature, result)
+	duplicate := false
+	for _, r := range results {
+		if r["Repository"] == repository && r["Match"] == match {
+			duplicate = true
+			break
 		}
+	}
+
+	if !duplicate {
+		results = append(results, result)
+		signatures[signature] = results
+		ui.AddToDetailsWindow(signature, result)
 	}
 }
 

@@ -15,7 +15,8 @@ import (
 )
 
 type Processor struct {
-	Columns []string
+	Columns  []string
+	Validate func(signature string, repository string, match string) bool
 }
 
 type Session struct {
@@ -29,6 +30,7 @@ type Session struct {
 	Repositories     chan GitResource
 	Gists            chan string
 	Comments         chan string
+	SearchResults    chan string
 	Context          context.Context
 	Clients          chan *GitHubClientWrapper
 	ExhaustedClients chan *GitHubClientWrapper
@@ -168,10 +170,11 @@ func (s *Session) WriteToCsv(line []string) {
 func GetSession() *Session {
 	sessionSync.Do(func() {
 		session = &Session{
-			Context:      context.Background(),
-			Repositories: make(chan GitResource, 1000),
-			Gists:        make(chan string, 100),
-			Comments:     make(chan string, 1000),
+			Context:       context.Background(),
+			Repositories:  make(chan GitResource, 1000),
+			Gists:         make(chan string, 100),
+			Comments:      make(chan string, 1000),
+			SearchResults: make(chan string, 1000),
 		}
 
 		if session.Options, err = ParseOptions(); err != nil {

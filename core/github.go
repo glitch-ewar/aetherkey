@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/go-github/github"
@@ -19,6 +20,62 @@ const (
 	perPage = 300
 	sleep   = 30 * time.Second
 )
+
+func Search(session *Session) {
+	localCtx, cancel := context.WithCancel(session.Context)
+	defer cancel()
+	opt := &github.GistListOptions{}
+
+	options := github.SearchOptions{}
+	options.ListOptions.Page = 1
+	options.ListOptions.PerPage = 100
+
+	var client *GitHubClientWrapper
+	for c := time.Tick(sleep); ; {
+		if client != nil {
+			session.FreeClient(client)
+		}
+
+		client = session.GetClient()
+
+		result, resp, err := client.Search.Code(localCtx, "SHODAN_API_KEY", &options)
+
+		if err != nil {
+			if _, ok := err.(*github.RateLimitError); ok {
+				session.Log.Warn("Token %s[..] rate limited. Reset at %s", client.Token[:10], resp.Rate.Reset)
+				client.RateLimitedUntil = resp.Rate.Reset.Time
+				session.FreeClient(client)
+				break
+			}
+
+			if _, ok := err.(*github.AbuseRateLimitError); ok {
+				session.Log.Fatal("GitHub API abused detected. Quitting...")
+			}
+
+			session.Log.Warn("Error getting GitHub searches: %s ... trying again", err)
+		}
+
+		for _, r := range result.CodeResults {
+			url := strings.Replace(r.GetHTMLURL(), "github.com", "raw.githubusercontent.com", 1)
+			url = strings.Replace(url, "/blob/", "/", 1)
+			session.SearchResults <- url
+		}
+
+		if len(result.CodeResults) > 0 {
+			options.ListOptions.Page += 1
+		}
+
+		opt.Since = time.Now()
+
+		select {
+		case <-c:
+			continue
+		case <-localCtx.Done():
+			cancel()
+			return
+		}
+	}
+}
 
 func GetRepositories(session *Session) {
 	localCtx, cancel := context.WithCancel(session.Context)

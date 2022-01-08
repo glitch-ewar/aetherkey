@@ -28,6 +28,7 @@ type ConfigSignature struct {
 	Match    string `yaml:"match,omitempty"`
 	Regex    string `yaml:"regex,omitempty"`
 	Verifier string `yaml:"verifier,omitempty"`
+	Search   string `yaml:"search,omitempty"`
 }
 
 func ParseConfig(options *Options) (*Config, error) {

@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -87,6 +88,50 @@ func ProcessComments() {
 	}
 }
 
+func ProcessSearches() {
+	//threadNum := *session.Options.Threads
+
+	//for i := 0; i < threadNum; i++ {
+	go func() {
+		for {
+			url := <-session.SearchResults
+			resp, err := http.Get(url)
+			// handle the error if there is one
+			if err != nil {
+				panic(err)
+			}
+			// do this now so it won't be forgotten
+			defer resp.Body.Close()
+
+			if resp.StatusCode == 200 {
+				// reads html as a slice of bytes
+				html, err := ioutil.ReadAll(resp.Body)
+				if err != nil {
+					panic(err)
+				}
+
+				for _, signature := range session.Signatures {
+					if len(signature.Search()) == 0 {
+						continue
+					}
+
+					matches := signature.GetContentsMatches(html)
+					if len(matches) > 0 {
+						for _, match := range matches {
+							session.Log.Important("[%s] Potential match for %s: %s", url, signature.Name(), match)
+						}
+
+						publish(&MatchEvent{Source: 1, Url: url, Matches: matches, Signature: signature.Name()})
+					}
+				}
+			} else {
+				session.Log.Warn("Failed to retrieve %s, status code %d", url, resp.StatusCode)
+			}
+		}
+	}()
+	//}
+}
+
 func processRepositoryOrGist(url string, ref string, stars int, source core.GitResourceType) {
 	var (
 		matchedAny bool = false
@@ -134,6 +179,10 @@ func checkSignatures(dir string, url string, stars int, source core.GitResourceT
 			}
 		} else {
 			for _, signature := range session.Signatures {
+				if len(signature.Search()) > 0 {
+					continue
+				}
+
 				if matched, part := signature.Match(file); matched {
 					if part == core.PartContents {
 						if matches = signature.GetContentsMatches(file.Contents); len(matches) > 0 {
@@ -205,14 +254,17 @@ func main() {
 	ui := core.GetUI()
 	ui.Initialize()
 
-	go core.GetRepositories(session)
-	go ProcessRepositories()
-	go ProcessComments()
+	go core.Search(session)
+	go ProcessSearches()
 
-	if *session.Options.ProcessGists {
-		go core.GetGists(session)
-		go ProcessGists()
-	}
+	// go core.GetRepositories(session)
+	// go ProcessRepositories()
+	// go ProcessComments()
+
+	// if *session.Options.ProcessGists {
+	// 	go core.GetGists(session)
+	// 	go ProcessGists()
+	// }
 
 	ui.Run()
 }

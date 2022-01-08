@@ -74,7 +74,7 @@ func (ui *UI) Initialize() {
 	ui.MainWindow = tview.NewFlex().SetDirection(tview.FlexRow)
 	ui.MainWindow.AddItem(ui.StatusWindow, 3, 1, false)
 	ui.MainWindow.AddItem(hflex, 0, 1, false)
-	ui.MainWindow.AddItem(ui.LogWindow, 10, 1, false)
+	ui.MainWindow.AddItem(ui.LogWindow, 20, 1, false)
 
 	go ui.UpdateStatus()
 }
@@ -91,7 +91,7 @@ func (ui *UI) AddToDetailsWindow(signature string, result Result) {
 	}
 }
 
-func (ui *UI) Publish(signature string, repository string, match string) {
+func (ui *UI) onSuccessfulValidation(signature string, repository string, match string) {
 	results, contains := signatures[signature]
 
 	if !contains {
@@ -118,6 +118,10 @@ func (ui *UI) Publish(signature string, repository string, match string) {
 	}
 }
 
+func (ui *UI) Publish(signature string, repository string, match string) {
+	go ui.ValidateMatch(signature, repository, match)
+}
+
 func (ui *UI) Run() {
 	if err := ui.App.SetRoot(ui.MainWindow, true).SetFocus(ui.SignaturesWindow).Run(); err != nil {
 		panic(err)
@@ -141,4 +145,13 @@ func GetUpdateString() string {
 	s := fmt.Sprintf("%s Running | Signatures: %d | Temp work dir: %s", sp[7-spCounter%8], len(session.Signatures), *session.Options.TempDirectory)
 	spCounter += 1
 	return s
+}
+
+func (ui *UI) ValidateMatch(signature string, repository string, match string) {
+	processor := GetSession().GetProcessor(signature)
+	if processor.Validate(signature, repository, match) {
+		ui.App.QueueUpdate(func() {
+			ui.onSuccessfulValidation(signature, repository, match)
+		})
+	}
 }

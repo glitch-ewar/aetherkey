@@ -20,18 +20,21 @@ type Signature interface {
 	Name() string
 	Match(file MatchFile) (bool, string)
 	GetContentsMatches(contents []byte) []string
+	Search() string
 }
 
 type SimpleSignature struct {
-	part  string
-	match string
-	name  string
+	part   string
+	match  string
+	name   string
+	search string
 }
 
 type PatternSignature struct {
-	part  string
-	match *regexp.Regexp
-	name  string
+	part   string
+	match  *regexp.Regexp
+	name   string
+	search string
 }
 
 func (s SimpleSignature) Match(file MatchFile) (bool, string) {
@@ -63,6 +66,10 @@ func (s SimpleSignature) GetContentsMatches(contents []byte) []string {
 
 func (s SimpleSignature) Name() string {
 	return s.name
+}
+
+func (s SimpleSignature) Search() string {
+	return s.search
 }
 
 func (s PatternSignature) Match(file MatchFile) (bool, string) {
@@ -115,21 +122,27 @@ func (s PatternSignature) Name() string {
 	return s.name
 }
 
+func (s PatternSignature) Search() string {
+	return s.search
+}
+
 func GetSignatures(s *Session) []Signature {
 	var signatures []Signature
 	for _, signature := range s.Config.Signatures {
 		if signature.Match != "" {
 			signatures = append(signatures, SimpleSignature{
-				name:  signature.Name,
-				part:  signature.Part,
-				match: signature.Match,
+				name:   signature.Name,
+				part:   signature.Part,
+				match:  signature.Match,
+				search: signature.Search,
 			})
 		} else {
 			if _, err := syntax.Parse(signature.Match, syntax.FoldCase); err == nil {
 				signatures = append(signatures, PatternSignature{
-					name:  signature.Name,
-					part:  signature.Part,
-					match: regexp.MustCompile(signature.Regex),
+					name:   signature.Name,
+					part:   signature.Part,
+					match:  regexp.MustCompile(signature.Regex),
+					search: signature.Search,
 				})
 			}
 		}

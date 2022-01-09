@@ -19,6 +19,11 @@ type Processor struct {
 	Validate func(signature string, repository string, match string) bool
 }
 
+type SearchResult struct {
+	Signature Signature
+	Url       string
+}
+
 type Session struct {
 	sync.Mutex
 
@@ -30,7 +35,7 @@ type Session struct {
 	Repositories     chan GitResource
 	Gists            chan string
 	Comments         chan string
-	SearchResults    chan string
+	SearchResults    chan SearchResult
 	Context          context.Context
 	Clients          chan *GitHubClientWrapper
 	ExhaustedClients chan *GitHubClientWrapper
@@ -174,7 +179,7 @@ func GetSession() *Session {
 			Repositories:  make(chan GitResource, 1000),
 			Gists:         make(chan string, 100),
 			Comments:      make(chan string, 1000),
-			SearchResults: make(chan string, 1000),
+			SearchResults: make(chan SearchResult, 1000),
 		}
 
 		if session.Options, err = ParseOptions(); err != nil {

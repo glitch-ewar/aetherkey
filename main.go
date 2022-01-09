@@ -89,47 +89,38 @@ func ProcessComments() {
 }
 
 func ProcessSearches() {
-	//threadNum := *session.Options.Threads
+	threadNum := *session.Options.Threads
 
-	//for i := 0; i < threadNum; i++ {
-	go func() {
-		for {
-			url := <-session.SearchResults
-			resp, err := http.Get(url)
-			// handle the error if there is one
-			if err != nil {
-				panic(err)
-			}
-			// do this now so it won't be forgotten
-			defer resp.Body.Close()
-
-			if resp.StatusCode == 200 {
-				// reads html as a slice of bytes
-				html, err := ioutil.ReadAll(resp.Body)
+	for i := 0; i < threadNum; i++ {
+		go func() {
+			for {
+				searchResult := <-session.SearchResults
+				resp, err := http.Get(searchResult.Url)
 				if err != nil {
 					panic(err)
 				}
+				defer resp.Body.Close()
 
-				for _, signature := range session.Signatures {
-					if len(signature.Search()) == 0 {
-						continue
+				if resp.StatusCode == 200 {
+					html, err := ioutil.ReadAll(resp.Body)
+					if err != nil {
+						panic(err)
 					}
 
-					matches := signature.GetContentsMatches(html)
-					if len(matches) > 0 {
-						for _, match := range matches {
-							session.Log.Important("[%s] Potential match for %s: %s", url, signature.Name(), match)
-						}
+					matches := searchResult.Signature.GetContentsMatches(html)
+					count := len(matches)
 
-						publish(&MatchEvent{Source: 1, Url: url, Matches: matches, Signature: signature.Name()})
+					if count > 0 {
+						m := strings.Join(matches, ", ")
+						session.Log.Important("[%s] %d %s for %s: %s", searchResult.Url, count, core.Pluralize(count, "match", "matches"), color.GreenString("Search Query"), color.YellowString(m))
+						publish(&MatchEvent{Source: 1, Url: searchResult.Url, Matches: matches, Signature: searchResult.Signature.Name()})
 					}
+				} else {
+					session.Log.Warn("Failed to retrieve %s, status code %d", searchResult.Url, resp.StatusCode)
 				}
-			} else {
-				session.Log.Warn("Failed to retrieve %s, status code %d", url, resp.StatusCode)
 			}
-		}
-	}()
-	//}
+		}()
+	}
 }
 
 func processRepositoryOrGist(url string, ref string, stars int, source core.GitResourceType) {

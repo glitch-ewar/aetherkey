@@ -21,51 +21,68 @@ const (
 	sleep   = 30 * time.Second
 )
 
+func processGitHubError(client *GitHubClientWrapper, resp *github.Response, err error) bool {
+	if err == nil {
+		return false
+	} else {
+		if _, ok := err.(*github.RateLimitError); ok {
+			session.Log.Warn("Token %s[..] rate limited. Reset at %s", client.Token[:10], resp.Rate.Reset)
+			client.RateLimitedUntil = resp.Rate.Reset.Time
+			session.FreeClient(client)
+			time.Sleep(sleep)
+		} else if _, ok := err.(*github.AbuseRateLimitError); ok {
+			session.Log.Fatal("GitHub API abused detected. Quitting...")
+		} else {
+			session.Log.Warn("Error from GitHub: %s ... trying again", err)
+			time.Sleep(sleep)
+		}
+		return true
+	}
+}
+
 func Search(session *Session) {
 	localCtx, cancel := context.WithCancel(session.Context)
 	defer cancel()
-	opt := &github.GistListOptions{}
 
 	options := github.SearchOptions{}
-	options.ListOptions.Page = 1
 	options.ListOptions.PerPage = 100
 
 	var client *GitHubClientWrapper
+
 	for c := time.Tick(sleep); ; {
-		if client != nil {
-			session.FreeClient(client)
-		}
+		for _, signature := range session.Signatures {
+			if len(signature.Search()) > 0 {
 
-		client = session.GetClient()
+				if client != nil {
+					session.FreeClient(client)
+				}
 
-		result, resp, err := client.Search.Code(localCtx, "SHODAN_API_KEY", &options)
+				client = session.GetClient()
 
-		if err != nil {
-			if _, ok := err.(*github.RateLimitError); ok {
-				session.Log.Warn("Token %s[..] rate limited. Reset at %s", client.Token[:10], resp.Rate.Reset)
-				client.RateLimitedUntil = resp.Rate.Reset.Time
-				session.FreeClient(client)
-				break
+				options.ListOptions.Page = 1
+				for keepSearching := true; keepSearching == true; {
+					result, resp, err := client.Search.Code(localCtx, signature.Search(), &options)
+
+					if processGitHubError(client, resp, err) {
+						continue
+					}
+
+					for _, r := range result.CodeResults {
+						url := strings.Replace(r.GetHTMLURL(), "github.com", "raw.githubusercontent.com", 1)
+						url = strings.Replace(url, "/blob/", "/", 1)
+						session.SearchResults <- SearchResult{Signature: signature, Url: url}
+					}
+
+					if len(result.CodeResults) > 0 {
+						options.ListOptions.Page += 1
+					} else {
+						keepSearching = false
+					}
+
+					time.Sleep(10 * time.Second)
+				}
 			}
-
-			if _, ok := err.(*github.AbuseRateLimitError); ok {
-				session.Log.Fatal("GitHub API abused detected. Quitting...")
-			}
-
-			session.Log.Warn("Error getting GitHub searches: %s ... trying again", err)
 		}
-
-		for _, r := range result.CodeResults {
-			url := strings.Replace(r.GetHTMLURL(), "github.com", "raw.githubusercontent.com", 1)
-			url = strings.Replace(url, "/blob/", "/", 1)
-			session.SearchResults <- url
-		}
-
-		if len(result.CodeResults) > 0 {
-			options.ListOptions.Page += 1
-		}
-
-		opt.Since = time.Now()
 
 		select {
 		case <-c:

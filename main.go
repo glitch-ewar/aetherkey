@@ -107,13 +107,14 @@ func ProcessSearches() {
 						panic(err)
 					}
 
+					validator := session.GetValidator(searchResult.Signature.Name())
 					matches := searchResult.Signature.GetContentsMatches(html)
-					count := len(matches)
-
-					if count > 0 {
-						m := strings.Join(matches, ", ")
-						session.Log.Important("[%s] %d %s for %s: %s", searchResult.Url, count, core.Pluralize(count, "match", "matches"), color.GreenString("Search Query"), color.YellowString(m))
-						publish(&MatchEvent{Source: 1, Url: searchResult.Url, Matches: matches, Signature: searchResult.Signature.Name()})
+					for _, match := range matches {
+						valid, _ := validator(searchResult.Signature.Name(), match)
+						if valid {
+							session.Log.Important("%s: Matched %s for %s.", searchResult.Url, match, searchResult.Signature.Name())
+							publish(&MatchEvent{Source: 1, Url: searchResult.Url, Matches: []string{match}, Signature: searchResult.Signature.Name()})
+						}
 					}
 				} else {
 					session.Log.Warn("Failed to retrieve %s, status code %d", searchResult.Url, resp.StatusCode)

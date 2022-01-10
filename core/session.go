@@ -24,6 +24,9 @@ type SearchResult struct {
 	Url       string
 }
 
+type ValidationInfo map[string]string
+type Validator func(signature string, match string) (bool, ValidationInfo)
+
 type Session struct {
 	sync.Mutex
 
@@ -41,6 +44,7 @@ type Session struct {
 	ExhaustedClients chan *GitHubClientWrapper
 	CsvWriter        *csv.Writer
 	Processors       map[string]Processor
+	Validators       map[string]Validator
 }
 
 var (
@@ -54,6 +58,7 @@ func (s *Session) Start() {
 
 	s.InitLogger()
 	s.InitProcessors()
+	s.InitValidators()
 	s.InitThreads()
 	s.InitSignatures()
 	s.InitGitHubClients()

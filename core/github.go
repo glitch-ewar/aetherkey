@@ -79,7 +79,7 @@ func Search(session *Session) {
 						keepSearching = false
 					}
 
-					time.Sleep(10 * time.Second)
+					time.Sleep(30 * time.Second)
 				}
 			}
 		}

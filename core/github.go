@@ -68,9 +68,10 @@ func Search(session *Session) {
 					}
 
 					for _, r := range result.CodeResults {
-						url := strings.Replace(r.GetHTMLURL(), "github.com", "raw.githubusercontent.com", 1)
-						url = strings.Replace(url, "/blob/", "/", 1)
-						session.SearchResults <- SearchResult{Signature: signature, Url: url}
+						url := r.GetHTMLURL()
+						rawUrl := strings.Replace(url, "github.com", "raw.githubusercontent.com", 1)
+						rawUrl = strings.Replace(rawUrl, "/blob/", "/", 1)
+						session.SearchResults <- SearchResult{Signature: signature, Url: url, RawUrl: rawUrl}
 					}
 
 					if len(result.CodeResults) > 0 {

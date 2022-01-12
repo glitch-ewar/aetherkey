@@ -19,6 +19,7 @@ type Columns []string
 type SearchResult struct {
 	Signature Signature
 	Url       string
+	RawUrl    string
 }
 
 type ValidationInfo map[string]string

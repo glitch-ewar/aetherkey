@@ -83,6 +83,7 @@ func (ui *UI) Initialize() {
 func (ui *UI) AddToDetailsWindow(signature string, event *MatchEvent) {
 	selectedSignature, _ := ui.SignaturesWindow.GetItemText(ui.SignaturesWindow.GetCurrentItem())
 	if selectedSignature == signature {
+		event.AdditionalInfo["URL"] = event.Url
 		idx := ui.DetailsWindow.GetRowCount()
 		columns := session.GetView(signature)
 

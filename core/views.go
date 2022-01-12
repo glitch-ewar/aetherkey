@@ -4,7 +4,7 @@ func (s *Session) InitViews() {
 	s.Views = make(map[string][]string)
 
 	s.Views["Default"] = []string{"Repository", "Match"}
-	s.Views["Shodan API Key"] = []string{"Key", "Plan", "Query credits", "Scan credits"}
+	s.Views["Shodan API Key"] = []string{"Key", "Plan", "Query credits", "Scan credits", "URL"}
 }
 
 func (s *Session) GetView(signature string) []string {

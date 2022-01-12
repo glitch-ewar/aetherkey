@@ -86,7 +86,7 @@ func ProcessSearches() {
 		go func() {
 			for {
 				searchResult := <-session.SearchResults
-				resp, err := http.Get(searchResult.Url)
+				resp, err := http.Get(searchResult.RawUrl)
 				if err != nil {
 					panic(err)
 				}

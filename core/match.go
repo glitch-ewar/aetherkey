@@ -7,6 +7,25 @@ import (
 	"strings"
 )
 
+type Relevance int
+
+const (
+	RelevanceHigh Relevance = iota
+	RelevanceMedium
+	RelevanceLow
+)
+
+type MatchEvent struct {
+	Url            string
+	Match          string
+	Signature      string
+	File           string
+	Stars          int
+	Source         GitResourceType
+	AdditionalInfo map[string]string
+	Relevance      Relevance
+}
+
 type MatchFile struct {
 	Path      string
 	Filename  string

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
 
@@ -16,56 +17,56 @@ type UI struct {
 	LogWindow        *tview.TextView
 }
 
-type Result map[string]string
-
 var tui UI
-var signatures map[string][]Result
+var signatures map[string][]MatchEvent
 
 func GetUI() *UI {
 	return &tui
 }
 
 func (ui *UI) Initialize() {
-	signatures = make(map[string][]Result)
+	signatures = make(map[string][]MatchEvent)
 
 	ui.App = tview.NewApplication()
 
 	ui.StatusWindow = tview.NewTextView()
 	ui.StatusWindow.SetBorder(true)
-	ui.StatusWindow.SetTitle("AETHERKEY")
+	ui.StatusWindow.SetTitle("[#00FFFF::b]AETHERKEY")
+	ui.StatusWindow.SetBorderColor(tcell.ColorAqua)
+	ui.StatusWindow.SetDynamicColors(true)
 	ui.StatusWindow.SetChangedFunc(func() {
 		ui.App.Draw()
 	})
 
 	ui.LogWindow = tview.NewTextView()
 	ui.LogWindow.SetBorder(true)
-	ui.LogWindow.SetTitle("Log")
+	ui.LogWindow.SetTitle("[::b]Log")
 	ui.LogWindow.SetChangedFunc(func() {
 		ui.App.Draw()
 	})
 
 	ui.SignaturesWindow = tview.NewList()
 	ui.SignaturesWindow.SetBorder(true)
-	ui.SignaturesWindow.SetTitle("Signatures")
+	ui.SignaturesWindow.SetTitle("[::b]Signatures")
 	ui.SignaturesWindow.ShowSecondaryText(false)
 	ui.SignaturesWindow.SetChangedFunc(func(index int, mainText, secondaryText string, shortcut rune) {
 		ui.DetailsWindow.Clear()
 
 		signature := mainText
-		processor := session.GetProcessor(signature)
-		for i, c := range processor.Columns {
-			ui.DetailsWindow.SetCell(0, i, tview.NewTableCell(c))
+		columns := session.GetView(signature)
+		for i, c := range columns {
+			ui.DetailsWindow.SetCell(0, i, tview.NewTableCell(fmt.Sprintf("[::b]%s", c)))
 		}
 
 		for _, r := range signatures[signature] {
-			ui.AddToDetailsWindow(signature, r)
+			ui.AddToDetailsWindow(signature, &r)
 		}
 	})
 
 	ui.DetailsWindow = tview.NewTable()
 	ui.DetailsWindow.SetBorders(true).
 		SetBorder(true).
-		SetTitle("Details")
+		SetTitle("[::b]Details")
 
 	hflex := tview.NewFlex().SetDirection(tview.FlexColumn).
 		AddItem(ui.SignaturesWindow, 0, 1, false).
@@ -74,52 +75,59 @@ func (ui *UI) Initialize() {
 	ui.MainWindow = tview.NewFlex().SetDirection(tview.FlexRow)
 	ui.MainWindow.AddItem(ui.StatusWindow, 3, 1, false)
 	ui.MainWindow.AddItem(hflex, 0, 1, false)
-	ui.MainWindow.AddItem(ui.LogWindow, 20, 1, false)
+	ui.MainWindow.AddItem(ui.LogWindow, 10, 1, false)
 
 	go ui.UpdateStatus()
 }
 
-func (ui *UI) AddToDetailsWindow(signature string, result Result) {
+func (ui *UI) AddToDetailsWindow(signature string, event *MatchEvent) {
 	selectedSignature, _ := ui.SignaturesWindow.GetItemText(ui.SignaturesWindow.GetCurrentItem())
 	if selectedSignature == signature {
 		idx := ui.DetailsWindow.GetRowCount()
-		processor := session.GetProcessor(signature)
+		columns := session.GetView(signature)
 
-		for i, c := range processor.Columns {
-			ui.DetailsWindow.SetCell(idx, i, tview.NewTableCell(result[c]))
+		for i, column := range columns {
+			value, exists := event.AdditionalInfo[column]
+			textColor := ui.relevanceToColor(event.Relevance)
+			if exists {
+				ui.DetailsWindow.SetCell(idx, i, tview.NewTableCell(value).SetTextColor(textColor))
+			} else {
+				ui.DetailsWindow.SetCell(idx, i, tview.NewTableCell("???").SetTextColor(textColor))
+			}
 		}
 	}
 }
 
-func (ui *UI) onSuccessfulValidation(signature string, repository string, match string) {
-	results, contains := signatures[signature]
+func (ui *UI) relevanceToColor(relevance Relevance) tcell.Color {
+	if relevance == RelevanceHigh {
+		return tcell.ColorAqua
+	} else if relevance == RelevanceLow {
+		return tcell.ColorGray
+	} else {
+		return tcell.ColorWhite
+	}
+}
+
+func (ui *UI) Publish(event *MatchEvent) {
+	results, contains := signatures[event.Signature]
 
 	if !contains {
-		results = make([]Result, 0)
-		ui.SignaturesWindow.AddItem(signature, "", 0, nil)
+		results = []MatchEvent{}
+		ui.SignaturesWindow.AddItem(event.Signature, "", 0, nil)
 	}
-
-	result := make(map[string]string)
-	result["Repository"] = repository
-	result["Match"] = match
 
 	duplicate := false
 	for _, r := range results {
-		if r["Repository"] == repository && r["Match"] == match {
+		if r.Url == event.Url && r.Match == event.Match {
 			duplicate = true
 			break
 		}
 	}
 
 	if !duplicate {
-		results = append(results, result)
-		signatures[signature] = results
-		ui.AddToDetailsWindow(signature, result)
+		signatures[event.Signature] = append(results, *event)
+		ui.AddToDetailsWindow(event.Signature, event)
 	}
-}
-
-func (ui *UI) Publish(signature string, repository string, match string) {
-	go ui.ValidateMatch(signature, repository, match)
 }
 
 func (ui *UI) Run() {
@@ -128,30 +136,34 @@ func (ui *UI) Run() {
 	}
 }
 
+var spinner = []string{"⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"}
+var spinnerCounter = 0
+
 func (ui *UI) UpdateStatus() {
 	const refreshInterval = 500 * time.Millisecond
 	for {
 		time.Sleep(refreshInterval)
 		ui.App.QueueUpdateDraw(func() {
 			ui.StatusWindow.SetText(GetUpdateString())
+			spinnerCounter += 1
 		})
 	}
 }
 
-var sp = []string{"⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"}
-var spCounter = 0
+func getSpinnerCharacter() string {
+	return spinner[7-spinnerCounter%8]
+}
 
 func GetUpdateString() string {
-	s := fmt.Sprintf("%s Running | Signatures: %d | Temp work dir: %s", sp[7-spCounter%8], len(session.Signatures), *session.Options.TempDirectory)
-	spCounter += 1
-	return s
-}
-
-func (ui *UI) ValidateMatch(signature string, repository string, match string) {
-	processor := GetSession().GetProcessor(signature)
-	if processor.Validate(signature, repository, match) {
-		ui.App.QueueUpdate(func() {
-			ui.onSuccessfulValidation(signature, repository, match)
-		})
+	hideLowRelevance := false
+	hideLowRelevanceText := "✕"
+	if hideLowRelevance {
+		hideLowRelevanceText = "✓"
 	}
+
+	return fmt.Sprintf("[#00FFFF]%s [::l]Running[::-] %s Signatures: %d | [::bu]H[::-]ide low relevance: %s | [::bu]Q[::-]uit",
+		getSpinnerCharacter(),
+		getSpinnerCharacter(),
+		len(session.Signatures),
+		hideLowRelevanceText)
 }

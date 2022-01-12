@@ -14,10 +14,7 @@ import (
 	"golang.org/x/oauth2"
 )
 
-type Processor struct {
-	Columns  []string
-	Validate func(signature string, repository string, match string) bool
-}
+type Columns []string
 
 type SearchResult struct {
 	Signature Signature
@@ -25,7 +22,7 @@ type SearchResult struct {
 }
 
 type ValidationInfo map[string]string
-type Validator func(signature string, match string) (bool, ValidationInfo)
+type Validator func(signature string, match string) (bool, ValidationInfo, Relevance)
 
 type Session struct {
 	sync.Mutex
@@ -43,7 +40,7 @@ type Session struct {
 	Clients          chan *GitHubClientWrapper
 	ExhaustedClients chan *GitHubClientWrapper
 	CsvWriter        *csv.Writer
-	Processors       map[string]Processor
+	Views            map[string][]string
 	Validators       map[string]Validator
 }
 
@@ -57,7 +54,7 @@ func (s *Session) Start() {
 	rand.Seed(time.Now().Unix())
 
 	s.InitLogger()
-	s.InitProcessors()
+	s.InitViews()
 	s.InitValidators()
 	s.InitThreads()
 	s.InitSignatures()

@@ -16,15 +16,6 @@ import (
 	"github.com/fatih/color"
 )
 
-type MatchEvent struct {
-	Url       string
-	Matches   []string
-	Signature string
-	File      string
-	Stars     int
-	Source    core.GitResourceType
-}
-
 var session = core.GetSession()
 
 func ProcessRepositories() {
@@ -110,10 +101,10 @@ func ProcessSearches() {
 					validator := session.GetValidator(searchResult.Signature.Name())
 					matches := searchResult.Signature.GetContentsMatches(html)
 					for _, match := range matches {
-						valid, _ := validator(searchResult.Signature.Name(), match)
+						valid, additionalInfo, relevance := validator(searchResult.Signature.Name(), match)
 						if valid {
 							session.Log.Important("%s: Matched %s for %s.", searchResult.Url, match, searchResult.Signature.Name())
-							publish(&MatchEvent{Source: 1, Url: searchResult.Url, Matches: []string{match}, Signature: searchResult.Signature.Name()})
+							publish(&core.MatchEvent{Source: 1, Url: searchResult.Url, Match: match, Signature: searchResult.Signature.Name(), AdditionalInfo: additionalInfo, Relevance: relevance})
 						}
 					}
 				} else {
@@ -180,7 +171,9 @@ func checkSignatures(dir string, url string, stars int, source core.GitResourceT
 						if matches = signature.GetContentsMatches(file.Contents); len(matches) > 0 {
 							count := len(matches)
 							m := strings.Join(matches, ", ")
-							publish(&MatchEvent{Source: source, Url: url, Matches: matches, Signature: signature.Name(), File: relativeFileName, Stars: stars})
+							for _, match := range matches {
+								publish(&core.MatchEvent{Source: source, Url: url, Match: match, Signature: signature.Name(), File: relativeFileName, Stars: stars})
+							}
 							matchedAny = true
 
 							session.Log.Important("[%s] %d %s for %s in file %s: %s", url, count, core.Pluralize(count, "match", "matches"), color.GreenString(signature.Name()), relativeFileName, color.YellowString(m))
@@ -188,7 +181,9 @@ func checkSignatures(dir string, url string, stars int, source core.GitResourceT
 						}
 					} else {
 						if *session.Options.PathChecks {
-							publish(&MatchEvent{Source: source, Url: url, Matches: matches, Signature: signature.Name(), File: relativeFileName, Stars: stars})
+							for _, match := range matches {
+								publish(&core.MatchEvent{Source: source, Url: url, Match: match, Signature: signature.Name(), File: relativeFileName, Stars: stars})
+							}
 							matchedAny = true
 
 							session.Log.Important("[%s] Matching file %s for %s", url, color.YellowString(relativeFileName), color.GreenString(signature.Name()))
@@ -214,7 +209,7 @@ func checkSignatures(dir string, url string, stars int, source core.GitResourceT
 										}
 
 										if !blacklistedMatch {
-											publish(&MatchEvent{Source: source, Url: url, Matches: []string{line}, Signature: "High entropy string", File: relativeFileName, Stars: stars})
+											publish(&core.MatchEvent{Source: source, Url: url, Match: line, Signature: "High entropy string", File: relativeFileName, Stars: stars})
 											matchedAny = true
 
 											session.Log.Important("[%s] Potential secret in %s = %s", url, color.YellowString(relativeFileName), color.GreenString(line))
@@ -236,10 +231,8 @@ func checkSignatures(dir string, url string, stars int, source core.GitResourceT
 	return
 }
 
-func publish(event *MatchEvent) {
-	for _, match := range event.Matches {
-		core.GetUI().Publish(event.Signature, event.Url, match)
-	}
+func publish(event *core.MatchEvent) {
+	core.GetUI().Publish(event)
 }
 
 func main() {

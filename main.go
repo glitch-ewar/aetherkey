@@ -88,14 +88,16 @@ func ProcessSearches() {
 				searchResult := <-session.SearchResults
 				resp, err := http.Get(searchResult.RawUrl)
 				if err != nil {
-					panic(err)
+					session.Log.Error("Error while retrieving results from %s: %s.", searchResult.RawUrl, err)
+					continue
 				}
 				defer resp.Body.Close()
 
 				if resp.StatusCode == 200 {
 					html, err := ioutil.ReadAll(resp.Body)
 					if err != nil {
-						panic(err)
+						session.Log.Error("Error while processing HTML request from %s: %s.", searchResult.RawUrl, err)
+						continue
 					}
 
 					validator := session.GetValidator(searchResult.Signature.Name())

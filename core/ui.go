@@ -19,6 +19,8 @@ type UI struct {
 
 var tui UI
 var signatures map[string][]MatchEvent
+var lastSelectedRow = 1
+var hideLowRelevance = false
 
 func GetUI() *UI {
 	return &tui
@@ -50,23 +52,36 @@ func (ui *UI) Initialize() {
 	ui.SignaturesWindow.SetTitle("[::b]Signatures")
 	ui.SignaturesWindow.ShowSecondaryText(false)
 	ui.SignaturesWindow.SetChangedFunc(func(index int, mainText, secondaryText string, shortcut rune) {
-		ui.DetailsWindow.Clear()
-
-		signature := mainText
-		columns := session.GetView(signature)
-		for i, c := range columns {
-			ui.DetailsWindow.SetCell(0, i, tview.NewTableCell(fmt.Sprintf("[::b]%s", c)))
+		ui.redrawDetailsWindow(mainText)
+	})
+	ui.SignaturesWindow.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyRight {
+			ui.App.SetFocus(ui.DetailsWindow)
+			ui.DetailsWindow.Select(lastSelectedRow, 0)
+			return nil
 		}
-
-		for _, r := range signatures[signature] {
-			ui.AddToDetailsWindow(signature, &r)
-		}
+		return sharedInput(event)
 	})
 
 	ui.DetailsWindow = tview.NewTable()
+	ui.DetailsWindow.SetEvaluateAllRows(true)
+	ui.DetailsWindow.SetSelectable(true, true)
+	ui.DetailsWindow.SetFixed(1, 1)
+	ui.DetailsWindow.Select(1, 0)
 	ui.DetailsWindow.SetBorders(true).
 		SetBorder(true).
 		SetTitle("[::b]Details")
+	ui.DetailsWindow.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyLeft {
+			r, c := ui.DetailsWindow.GetSelection()
+			if c == 0 {
+				ui.App.SetFocus(ui.SignaturesWindow)
+				lastSelectedRow = r
+				return nil
+			}
+		}
+		return sharedInput(event)
+	})
 
 	hflex := tview.NewFlex().SetDirection(tview.FlexColumn).
 		AddItem(ui.SignaturesWindow, 0, 1, false).
@@ -81,9 +96,13 @@ func (ui *UI) Initialize() {
 }
 
 func (ui *UI) AddToDetailsWindow(signature string, event *MatchEvent) {
+	event.AdditionalInfo["URL"] = event.Url
+	if hideLowRelevance && event.Relevance == RelevanceLow {
+		return
+	}
+
 	selectedSignature, _ := ui.SignaturesWindow.GetItemText(ui.SignaturesWindow.GetCurrentItem())
 	if selectedSignature == signature {
-		event.AdditionalInfo["URL"] = event.Url
 		idx := ui.DetailsWindow.GetRowCount()
 		columns := session.GetView(signature)
 
@@ -156,7 +175,6 @@ func getSpinnerCharacter() string {
 }
 
 func GetUpdateString() string {
-	hideLowRelevance := false
 	hideLowRelevanceText := "✕"
 	if hideLowRelevance {
 		hideLowRelevanceText = "✓"
@@ -167,4 +185,32 @@ func GetUpdateString() string {
 		getSpinnerCharacter(),
 		len(session.Signatures),
 		hideLowRelevanceText)
+}
+
+func (ui *UI) redrawDetailsWindow(signature string) {
+	ui.DetailsWindow.Clear()
+
+	columns := session.GetView(signature)
+	for i, c := range columns {
+		ui.DetailsWindow.SetCell(0, i, tview.NewTableCell(fmt.Sprintf("[::b]%s", c)))
+	}
+
+	for _, r := range signatures[signature] {
+		ui.AddToDetailsWindow(signature, &r)
+	}
+}
+
+func sharedInput(event *tcell.EventKey) *tcell.EventKey {
+	if event.Rune() == 'h' {
+		ui := GetUI()
+		hideLowRelevance = !hideLowRelevance
+		ui.StatusWindow.SetText(GetUpdateString())
+
+		if ui.SignaturesWindow.GetItemCount() > 0 {
+			mainText, _ := ui.SignaturesWindow.GetItemText(ui.SignaturesWindow.GetCurrentItem())
+			ui.redrawDetailsWindow(mainText)
+		}
+		return nil
+	}
+	return event
 }

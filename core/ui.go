@@ -211,6 +211,8 @@ func sharedInput(event *tcell.EventKey) *tcell.EventKey {
 			ui.redrawDetailsWindow(mainText)
 		}
 		return nil
+	} else if event.Rune() == 'q' {
+		GetUI().App.Stop()
 	}
 	return event
 }

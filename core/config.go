@@ -63,16 +63,12 @@ func ParseConfig(options *Options) (*Config, error) {
 		return config, err
 	}
 
-	if len(*options.Local) <= 0 && (len(config.GitHubAccessTokens) < 1 || strings.TrimSpace(strings.Join(config.GitHubAccessTokens, "")) == "") {
-		return config, errors.New("You need to provide at least one GitHub Access Token. See https://help.github.com/en/articles/creating-a-personal-access-token-for-the-command-line")
-	}
-
 	for i := 0; i < len(config.GitHubAccessTokens); i++ {
 		config.GitHubAccessTokens[i] = os.ExpandEnv(config.GitHubAccessTokens[i])
 	}
 
-	if len(config.Webhook) > 0 {
-		config.Webhook = os.ExpandEnv(config.Webhook)
+	if len(config.GitHubAccessTokens) < 1 || strings.TrimSpace(strings.Join(config.GitHubAccessTokens, "")) == "" {
+		return config, errors.New("You need to provide at least one GitHub Access Token. See https://help.github.com/en/articles/creating-a-personal-access-token-for-the-command-line")
 	}
 
 	return config, nil

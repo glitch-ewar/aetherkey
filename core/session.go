@@ -24,6 +24,7 @@ type SearchResult struct {
 
 type ValidationInfo map[string]string
 type Validator func(signature string, match string) (bool, ValidationInfo, Relevance)
+type CsvWriters map[string]*csv.Writer
 
 type Session struct {
 	sync.Mutex
@@ -40,9 +41,9 @@ type Session struct {
 	Context          context.Context
 	Clients          chan *GitHubClientWrapper
 	ExhaustedClients chan *GitHubClientWrapper
-	CsvWriter        *csv.Writer
 	Views            map[string][]string
 	Validators       map[string]Validator
+	CsvWriters       CsvWriters
 }
 
 var (
@@ -60,7 +61,7 @@ func (s *Session) Start() {
 	s.InitThreads()
 	s.InitSignatures()
 	s.InitGitHubClients()
-	s.InitCsvWriter()
+	s.InitCsvWriters()
 }
 
 func (s *Session) InitLogger() {
@@ -146,33 +147,82 @@ func (s *Session) InitThreads() {
 	runtime.GOMAXPROCS(*s.Options.Threads + 1)
 }
 
-func (s *Session) InitCsvWriter() {
-	if *s.Options.CsvPath == "" {
-		return
+func (s *Session) getCsvDir() string {
+	cacheDir, err := os.UserCacheDir()
+	if err != nil {
+		fmt.Println("Unable to get cache directory:", err)
+		os.Exit(1)
 	}
 
-	writeHeader := false
-	if !PathExists(*s.Options.CsvPath) {
-		writeHeader = true
-	}
+	csvDir := fmt.Sprintf("%s%caetherkey", cacheDir, os.PathSeparator)
+	os.Mkdir(csvDir, 0755)
 
-	file, err := os.OpenFile(*s.Options.CsvPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	LogIfError("Could not create/open CSV file", err)
+	return csvDir
+}
 
-	s.CsvWriter = csv.NewWriter(file)
+func (s *Session) InitCsvWriters() {
+	s.CsvWriters = make(CsvWriters)
+	csvDir := s.getCsvDir()
+	for _, signature := range s.Signatures {
+		csvPath := fmt.Sprintf("%s%c%s.csv", csvDir, os.PathSeparator, signature.Name())
 
-	if writeHeader {
-		s.WriteToCsv([]string{"Repository name", "Signature name", "Matching file", "Matches"})
+		writeHeader := false
+		if !PathExists(csvPath) {
+			writeHeader = true
+		}
+
+		file, err := os.OpenFile(csvPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			fmt.Println("Could not create CSV file:", err)
+			continue
+		} else {
+			writer := csv.NewWriter(file)
+			s.CsvWriters[signature.Name()] = writer
+			if writeHeader {
+				header := []string{"File", "Match", "URL"}
+				header = append(header, s.Views[signature.Name()]...)
+				writer.Write(header)
+				writer.Flush()
+			}
+
+		}
 	}
 }
 
-func (s *Session) WriteToCsv(line []string) {
-	if *s.Options.CsvPath == "" {
+func (s *Session) WriteToCsv(event *MatchEvent) {
+	writer, exists := s.CsvWriters[event.Signature]
+	if exists == false {
 		return
 	}
 
-	s.CsvWriter.Write(line)
-	s.CsvWriter.Flush()
+	line := []string{
+		event.File,
+		event.Match,
+		event.Url,
+	}
+
+	for _, v := range event.AdditionalInfo {
+		line = append(line, v)
+	}
+
+	writer.Write(line)
+	writer.Flush()
+}
+
+func (s *Session) LoadCsvs() {
+	csvDir := s.getCsvDir()
+	for _, signature := range s.Signatures {
+		csvPath := fmt.Sprintf("%s%cAetherKey%c%s.csv", csvDir, os.PathSeparator, os.PathSeparator, signature.Name())
+		file, err := os.Open(csvPath)
+		if err != nil {
+			s.Log.Error("Could not open CSV file: %s.", err)
+			continue
+		} else {
+			defer file.Close()
+			reader := csv.NewReader(file)
+			reader.ReadAll()
+		}
+	}
 }
 
 func GetSession() *Session {

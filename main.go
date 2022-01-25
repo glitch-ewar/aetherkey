@@ -160,7 +160,6 @@ func checkSignatures(dir string, url string, stars int, source core.GitResourceT
 				count := len(matches)
 				m := strings.Join(matches, ", ")
 				session.Log.Important("[%s] %d %s for %s in file %s: %s", url, count, core.Pluralize(count, "match", "matches"), color.GreenString("Search Query"), relativeFileName, color.YellowString(m))
-				session.WriteToCsv([]string{url, "Search Query", relativeFileName, m})
 			}
 		} else {
 			for _, signature := range session.Signatures {
@@ -179,7 +178,6 @@ func checkSignatures(dir string, url string, stars int, source core.GitResourceT
 							matchedAny = true
 
 							session.Log.Important("[%s] %d %s for %s in file %s: %s", url, count, core.Pluralize(count, "match", "matches"), color.GreenString(signature.Name()), relativeFileName, color.YellowString(m))
-							session.WriteToCsv([]string{url, signature.Name(), relativeFileName, m})
 						}
 					} else {
 						if *session.Options.PathChecks {
@@ -189,7 +187,6 @@ func checkSignatures(dir string, url string, stars int, source core.GitResourceT
 							matchedAny = true
 
 							session.Log.Important("[%s] Matching file %s for %s", url, color.YellowString(relativeFileName), color.GreenString(signature.Name()))
-							session.WriteToCsv([]string{url, signature.Name(), relativeFileName, ""})
 						}
 
 						if *session.Options.EntropyThreshold > 0 && file.CanCheckEntropy() {
@@ -215,7 +212,6 @@ func checkSignatures(dir string, url string, stars int, source core.GitResourceT
 											matchedAny = true
 
 											session.Log.Important("[%s] Potential secret in %s = %s", url, color.YellowString(relativeFileName), color.GreenString(line))
-											session.WriteToCsv([]string{url, "High entropy string", relativeFileName, line})
 										}
 									}
 								}
@@ -235,6 +231,7 @@ func checkSignatures(dir string, url string, stars int, source core.GitResourceT
 
 func publish(event *core.MatchEvent) {
 	core.GetUI().Publish(event)
+	core.GetSession().WriteToCsv(event)
 }
 
 func main() {
